@@ -1,6 +1,8 @@
 import collections
 import random
 from math import floor
+import matplotlib.pyplot as plt
+import numpy as np
 
 
 class General:
@@ -29,26 +31,28 @@ class General:
                                                              self.number_of_traitors + 1) else False
 
 
-NUMBER_OF_TRAITORS = 1
+NUMBER_OF_TRAITORS = 2
 # number of all generals must be n >= (4 * NUMBER_OF_TRAITORS + 1)
-INPUT_OF_ALL_GENERALS = 6
+INPUT_OF_ALL_GENERALS = 9
 NUMBER_OF_ALL_GENERALS = INPUT_OF_ALL_GENERALS if INPUT_OF_ALL_GENERALS >= (4 * NUMBER_OF_TRAITORS + 1) \
     else (4 * NUMBER_OF_TRAITORS + 1)
 NUMBER_OF_ROUNDS = NUMBER_OF_TRAITORS + 1
 MAX_VALUE = 3
 MIN_VALUE = 0
 
+preferred_values_for_plot = []
+
 
 def main():
     generals = []
     for i in range(NUMBER_OF_ALL_GENERALS):
-        generals.append(General("p"+str(i), random.randint(MIN_VALUE, MAX_VALUE), False, False, NUMBER_OF_TRAITORS,
+        generals.append(General("p" + str(i), random.randint(MIN_VALUE, MAX_VALUE), False, False, NUMBER_OF_TRAITORS,
                                 NUMBER_OF_ALL_GENERALS))
 
     # choosing traitors at random
     traitors = []
     while len(traitors) != NUMBER_OF_TRAITORS:
-        faulty = random.randint(0, len(generals)-1)
+        faulty = random.randint(0, len(generals) - 1)
         if faulty in traitors:
             continue
         else:
@@ -60,7 +64,7 @@ def main():
     # choosing king for every round at random
     kings_order = []
     while len(kings_order) != NUMBER_OF_ROUNDS:
-        king = random.randint(0, len(generals)-1)
+        king = random.randint(0, len(generals) - 1)
         if king in kings_order:
             continue
         else:
@@ -96,6 +100,15 @@ def main():
                   "Weak Majority: ", generals[i].is_weak_majority, "King: ", generals[i].is_king,
                   "Faulty: ", generals[i].is_faulty)
 
+        # preferred values before round 2
+        temp_tab = []
+        for i in range(len(generals)):
+            if i == 0:
+                temp_tab = []
+            temp_tab.append(generals[i].preferred_value)
+            if i == len(generals) - 1:
+                preferred_values_for_plot.append(temp_tab)
+
         # round 2
         # king sends his preferred value to everyone
         for i in range(len(generals)):
@@ -113,6 +126,15 @@ def main():
                                 generals[j].preferred_value = generals[i].majority
                                 generals[j].preferred_values_of_every_general[j] = generals[i].majority
 
+        # save preferred values for plot
+        temp_tab = []
+        for i in range(len(generals)):
+            if i == 0:
+                temp_tab = []
+            temp_tab.append(generals[i].preferred_value)
+            if i == len(generals)-1:
+                preferred_values_for_plot.append(temp_tab)
+
         print()
 
         # make current king no king
@@ -129,6 +151,41 @@ def main():
             final_decision = generals[i].preferred_value
             break
     print("Final decision: ", final_decision)
+
+    # generating plot
+    labels = []
+    for i in range(NUMBER_OF_ROUNDS):
+        labels.append("F" + str(i) + "_1")
+        labels.append("F" + str(i) + "_2")
+
+    legend = []
+    for i in range(MIN_VALUE, MAX_VALUE + 1):
+        legend.append(str(i))
+
+    min_value_temp = MIN_VALUE
+    chart_values = []
+    for i in range(MAX_VALUE - MIN_VALUE + 1):
+        chart_values.append([])
+        for j in range(NUMBER_OF_ROUNDS * 2):
+            count = 0
+            for k in range(NUMBER_OF_ALL_GENERALS):
+                if preferred_values_for_plot[j][k] == min_value_temp + i:
+                    count = count + 1
+            chart_values[i].append(count)
+
+    x = np.arange(NUMBER_OF_ROUNDS * 2)
+    width = 0.2
+
+    for i in range(MAX_VALUE - MIN_VALUE + 1):
+        plt.bar(x - (width * (MAX_VALUE - MIN_VALUE + 1) / 2) + i * width, chart_values[i], width, align='edge')
+
+    plt.xticks(x, labels)
+    plt.title("Algorytm Króla - wizualizacja")
+    plt.xlabel("Fazy")
+    plt.ylabel("Wystąpienia decyzji")
+    plt.legend(legend)
+
+    plt.show()
 
 
 if __name__ == "__main__":
