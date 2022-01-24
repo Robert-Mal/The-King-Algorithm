@@ -1,8 +1,10 @@
 import collections
 import random
+from itertools import count, permutations
 from math import floor
 import matplotlib.pyplot as plt
-import numpy as np
+import networkx as nx
+import matplotlib.animation
 
 
 class General:
@@ -31,7 +33,7 @@ class General:
                                                              self.number_of_traitors + 1) else False
 
 
-NUMBER_OF_TRAITORS = 2
+NUMBER_OF_TRAITORS = 3
 # number of all generals must be n >= (4 * NUMBER_OF_TRAITORS + 1)
 INPUT_OF_ALL_GENERALS = 9
 NUMBER_OF_ALL_GENERALS = INPUT_OF_ALL_GENERALS if INPUT_OF_ALL_GENERALS >= (4 * NUMBER_OF_TRAITORS + 1) \
@@ -41,6 +43,7 @@ MAX_VALUE = 3
 MIN_VALUE = 0
 
 preferred_values_for_plot = []
+kings_send_values = []
 
 
 def main():
@@ -111,34 +114,41 @@ def main():
 
         # round 2
         # king sends his preferred value to everyone
+        kings_values_temp = []
         for i in range(len(generals)):
             if generals[i].is_king:
                 for j in range(len(generals)):
+                    temp_rand = random.randint(MIN_VALUE, MAX_VALUE)
+                    if i != j:
+                        if generals[i].is_faulty:
+                            kings_values_temp.append(temp_rand)
+                        else:
+                            kings_values_temp.append(generals[i].majority)
                     if j == i:
                         generals[i].preferred_values_of_every_general[i] = generals[i].majority
                     else:
                         if generals[j].is_weak_majority:
                             if generals[i].is_faulty:
-                                temp_rand = random.randint(MIN_VALUE, MAX_VALUE)
                                 generals[j].preferred_value = temp_rand
                                 generals[j].preferred_values_of_every_general[j] = temp_rand
                             else:
                                 generals[j].preferred_value = generals[i].majority
                                 generals[j].preferred_values_of_every_general[j] = generals[i].majority
-
-        # save preferred values for plot
-        temp_tab = []
-        for i in range(len(generals)):
-            if i == 0:
-                temp_tab = []
-            temp_tab.append(generals[i].preferred_value)
-            if i == len(generals)-1:
-                preferred_values_for_plot.append(temp_tab)
+        kings_send_values.append(kings_values_temp)
 
         print()
 
         # make current king no king
         generals[kings_order[k]].is_king = False
+
+    # save preferred values for plot
+    temp_tab = []
+    for i in range(len(generals)):
+        if i == 0:
+            temp_tab = []
+        temp_tab.append(generals[i].preferred_value)
+        if i == len(generals)-1:
+            preferred_values_for_plot.append(temp_tab)
 
     # print all final preferred values
     for i in range(len(generals)):
@@ -152,39 +162,69 @@ def main():
             break
     print("Final decision: ", final_decision)
 
-    # generating plot
-    labels = []
-    for i in range(NUMBER_OF_ROUNDS):
-        labels.append("F" + str(i) + "_1")
-        labels.append("F" + str(i) + "_2")
+    # network x animation
+    nodes = []
+    for i in range(NUMBER_OF_ALL_GENERALS):
+        node = (i, {"preferred_value": preferred_values_for_plot[0][i]})
+        nodes.append(node)
 
-    legend = []
-    for i in range(MIN_VALUE, MAX_VALUE + 1):
-        legend.append(str(i))
+    edges = []
+    for pair in permutations(list(range(NUMBER_OF_ALL_GENERALS)), 2):
+        edges.append(pair)
 
-    min_value_temp = MIN_VALUE
-    chart_values = []
-    for i in range(MAX_VALUE - MIN_VALUE + 1):
-        chart_values.append([])
-        for j in range(NUMBER_OF_ROUNDS * 2):
-            count = 0
-            for k in range(NUMBER_OF_ALL_GENERALS):
-                if preferred_values_for_plot[j][k] == min_value_temp + i:
-                    count = count + 1
-            chart_values[i].append(count)
+    g = nx.Graph()
+    g.add_nodes_from(nodes)
+    g.add_edges_from(edges)
+    pos = nx.circular_layout(g)
 
-    x = np.arange(NUMBER_OF_ROUNDS * 2)
-    width = 0.2
+    fig, ax = plt.subplots(figsize=(9, 8))
 
-    for i in range(MAX_VALUE - MIN_VALUE + 1):
-        plt.bar(x - (width * (MAX_VALUE - MIN_VALUE + 1) / 2) + i * width, chart_values[i], width, align='edge')
+    def update(num):
+        ax.clear()
 
-    plt.xticks(x, labels)
-    plt.title("Algorytm Króla - wizualizacja")
-    plt.xlabel("Fazy")
-    plt.ylabel("Wystąpienia decyzji")
-    plt.legend(legend)
+        edge_colors = []
+        if num == NUMBER_OF_ROUNDS*2:
+            ec = nx.draw_networkx_edges(g, pos, alpha=0)
+        elif num % 2 == 0:
+            ec = nx.draw_networkx_edges(g, pos, alpha=0.1)
+        else:
+            index = int((num - 1) / 2)
+            edges_list = []
+            for i in range(NUMBER_OF_ALL_GENERALS):
+                if i != kings_order[index]:
+                    edges_list.append([kings_order[index], i])
+            edge_colors.clear()
+            edge_colors.extend(kings_send_values[int((num - 1) / 2)])
+            ec = nx.draw_networkx_edges(g, pos, edgelist=edges_list, edge_color=edge_colors, edge_cmap=plt.cm.jet,
+                                        width=2)
 
+        node_edge_colors = []
+        for i in range(NUMBER_OF_ALL_GENERALS):
+            if i in traitors:
+                node_edge_colors.append('red')
+            else:
+                node_edge_colors.append('black')
+
+        if num % 2 == 0:
+            for i in range(NUMBER_OF_ALL_GENERALS):
+                g.nodes[i]["preferred_value"] = preferred_values_for_plot[int(num/2)][i]
+
+        groups = set(nx.get_node_attributes(g, 'preferred_value').values())
+        mapping = dict(zip(sorted(groups), count()))
+        colors = [mapping[g.nodes[n]['preferred_value']] for n in g.nodes]
+
+        nc = nx.draw_networkx_nodes(g, pos, node_color=colors, node_size=450, cmap=plt.cm.jet,
+                                    edgecolors=node_edge_colors, linewidths=3)
+        phase = 1
+        if num % 2 == 1:
+            phase = phase + 1 + int(num / 2) - num % 2
+        else:
+            phase = phase + int(num / 2) - num % 2
+        ax.set_title("Phase " + str(phase) + " Round " + str(num % 2 + 1))
+        ax.set_xticks([])
+        ax.set_yticks([])
+
+    ani = matplotlib.animation.FuncAnimation(fig, update, frames=NUMBER_OF_ROUNDS*2+1, interval=2000, repeat=True)
     plt.show()
 
 
